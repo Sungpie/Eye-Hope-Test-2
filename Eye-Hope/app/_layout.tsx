@@ -65,6 +65,13 @@ export default function RootLayout() {
             title: "카테고리별 뉴스",
           }}
         />
+        <Stack.Screen
+          name="nicknameInput"
+          options={{
+            headerShown: false,
+            title: "닉네임 입력",
+          }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />

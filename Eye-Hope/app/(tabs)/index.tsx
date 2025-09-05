@@ -8,13 +8,14 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  TouchableOpacity, // TouchableOpacity를 import 합니다.
-  Linking, // Linking을 import 합니다.
+  TouchableOpacity,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams } from "expo-router";
+import { userApiService } from "../services/userApi";
 
 interface NewsItem {
   id: string;
@@ -23,7 +24,7 @@ interface NewsItem {
   category: string;
   source: string;
   publishedAt: string;
-  url: string; // url 속성을 추가합니다.
+  url: string;
 }
 
 // 카테고리별 색상 매핑
@@ -39,7 +40,7 @@ const getCategoryColor = (category: string): string => {
     오피니언: "#54A0FF",
   };
 
-  return colorMap[category] || "#007AFF"; // 기본색상
+  return colorMap[category] || "#007AFF";
 };
 
 export default function InterestNewsScreen() {
@@ -52,46 +53,64 @@ export default function InterestNewsScreen() {
     morning: string;
     evening: string;
   } | null>(null);
+  const [userNickname, setUserNickname] = useState<string>("");
 
   // 저장된 카테고리 불러오기
   useEffect(() => {
-    loadCategories();
+    loadUserData();
   }, []);
 
-  // 파라미터에서 카테고리와 시간 정보 받아오기
+  // 파라미터에서 카테고리와 시간 정보 받아오기 (무한 루프 방지)
   useEffect(() => {
-    if (params.categories) {
+    let hasUpdated = false;
+
+    if (params.categories && !hasUpdated) {
       try {
         const categoriesFromParams = JSON.parse(params.categories as string);
-        setCategories(categoriesFromParams);
-        // AsyncStorage에 저장
-        saveCategoriesToStorage(categoriesFromParams);
+        if (
+          JSON.stringify(categoriesFromParams) !== JSON.stringify(categories)
+        ) {
+          setCategories(categoriesFromParams);
+          saveCategoriesToStorage(categoriesFromParams);
+          hasUpdated = true;
+        }
       } catch (error) {
         console.error("카테고리 파라미터 파싱 오류:", error);
       }
     }
 
-    if (params.morningTime && params.eveningTime) {
+    if (params.morningTime && params.eveningTime && !hasUpdated) {
       const times = {
         morning: params.morningTime as string,
         evening: params.eveningTime as string,
       };
-      setSelectedTimes(times);
-      // AsyncStorage에 시간 정보 저장
-      saveTimesToStorage(times);
+      if (JSON.stringify(times) !== JSON.stringify(selectedTimes)) {
+        setSelectedTimes(times);
+        saveTimesToStorage(times);
+        hasUpdated = true;
+      }
     }
 
-    // selectedTimes 파라미터도 처리 (JSON 문자열 형태)
-    if (params.selectedTimes) {
+    if (params.selectedTimes && !hasUpdated) {
       try {
         const times = JSON.parse(params.selectedTimes as string);
         if (times.morning && times.evening) {
-          setSelectedTimes(times);
-          // AsyncStorage에 시간 정보 저장
-          saveTimesToStorage(times);
+          if (JSON.stringify(times) !== JSON.stringify(selectedTimes)) {
+            setSelectedTimes(times);
+            saveTimesToStorage(times);
+            hasUpdated = true;
+          }
         }
       } catch (error) {
         console.error("시간 파라미터 파싱 오류:", error);
+      }
+    }
+
+    if (params.nickname && !hasUpdated) {
+      const newNickname = params.nickname as string;
+      if (newNickname !== userNickname) {
+        setUserNickname(newNickname);
+        hasUpdated = true;
       }
     }
   }, [
@@ -99,13 +118,23 @@ export default function InterestNewsScreen() {
     params.morningTime,
     params.eveningTime,
     params.selectedTimes,
+    params.nickname,
   ]);
 
-  // 화면이 포커스될 때마다 카테고리 새로고침
+  // 화면이 포커스될 때마다 카테고리 새로고침 (API 호출 최적화)
   useFocusEffect(
     React.useCallback(() => {
       console.log("관심뉴스 화면 포커스됨");
-      loadCategories();
+
+      // 데이터가 이미 로드되어 있고 카테고리가 있으면 API 호출 생략
+      if (categories.length > 0 && userNickname) {
+        console.log("데이터가 이미 있어서 API 호출 생략");
+        return;
+      }
+
+      // 데이터가 없을 때만 로드
+      console.log("데이터 없음, 사용자 데이터 로드 시작");
+      loadUserData();
     }, [])
   );
 
@@ -119,21 +148,73 @@ export default function InterestNewsScreen() {
     }
   }, [categories]);
 
-  const loadCategories = async () => {
+  const loadUserData = async () => {
     try {
+      console.log("사용자 데이터 로드 시작");
+
+      // 백엔드에서 사용자 프로필 가져오기 시도 (한 번만)
+      try {
+        const profileResponse = await userApiService.getUserProfile();
+        if (profileResponse.success && profileResponse.data) {
+          const profile = profileResponse.data;
+          console.log("백엔드에서 프로필 가져오기 성공:", profile);
+
+          setCategories(profile.categories || []);
+          setSelectedTimes(profile.schedules || null);
+          setUserNickname(profile.nickname || "");
+
+          // 로컬에도 저장
+          await AsyncStorage.setItem(
+            "userCategories",
+            JSON.stringify(profile.categories || [])
+          );
+          await AsyncStorage.setItem(
+            "userTimes",
+            JSON.stringify(profile.schedules || {})
+          );
+          await AsyncStorage.setItem("userNickname", profile.nickname || "");
+
+          console.log("백엔드 데이터로 상태 업데이트 완료");
+          return;
+        }
+      } catch (error) {
+        console.log("백엔드 API 호출 실패, 로컬 데이터 사용:", error);
+      }
+
+      // 백엔드 실패 시 로컬 데이터 사용
+      console.log("로컬 저장소에서 데이터 로드");
       const savedCategories = await AsyncStorage.getItem("userCategories");
+      const savedTimes = await AsyncStorage.getItem("userTimes");
+      const savedNickname = await AsyncStorage.getItem("userNickname");
+
       if (savedCategories) {
         const parsedCategories = JSON.parse(savedCategories);
         setCategories(parsedCategories);
+        console.log("로컬에서 카테고리 로드:", parsedCategories);
       } else {
-        // 기본 카테고리 설정
         const defaultCategories = ["경제", "정치", "사회"];
         setCategories(defaultCategories);
+        console.log("기본 카테고리 설정:", defaultCategories);
+      }
+
+      if (savedTimes) {
+        const parsedTimes = JSON.parse(savedTimes);
+        setSelectedTimes(parsedTimes);
+        console.log("로컬에서 시간 정보 로드:", parsedTimes);
+      }
+
+      if (savedNickname) {
+        setUserNickname(savedNickname);
+        console.log("로컬에서 닉네임 로드:", savedNickname);
+      } else {
+        setUserNickname("사용자");
+        console.log("기본 닉네임 설정");
       }
     } catch (error) {
-      console.error("카테고리 로드 오류:", error);
-      // 기본 카테고리로 설정
+      console.error("사용자 데이터 로드 오류:", error);
+      // 모든 로드 실패 시 기본값 설정
       setCategories(["경제", "정치", "사회"]);
+      setUserNickname("사용자");
     }
   };
 
@@ -141,6 +222,14 @@ export default function InterestNewsScreen() {
     try {
       await AsyncStorage.setItem("userCategories", JSON.stringify(categories));
       console.log("카테고리가 저장되었습니다:", categories);
+
+      // 백엔드에도 업데이트 시도
+      try {
+        await userApiService.updateUserCategories(categories);
+        console.log("백엔드 카테고리 업데이트 성공");
+      } catch (error) {
+        console.log("백엔드 카테고리 업데이트 실패:", error);
+      }
     } catch (error) {
       console.error("카테고리 저장 오류:", error);
     }
@@ -153,6 +242,14 @@ export default function InterestNewsScreen() {
     try {
       await AsyncStorage.setItem("userTimes", JSON.stringify(times));
       console.log("시간 정보가 저장되었습니다:", times);
+
+      // 백엔드에도 업데이트 시도
+      try {
+        await userApiService.updateUserSchedule(times);
+        console.log("백엔드 스케줄 업데이트 성공");
+      } catch (error) {
+        console.log("백엔드 스케줄 업데이트 실패:", error);
+      }
     } catch (error) {
       console.error("시간 정보 저장 오류:", error);
     }
@@ -211,7 +308,6 @@ export default function InterestNewsScreen() {
         allNews.map((news, index) => `${categories[index]}: ${news.length}개`)
       );
 
-      // [수정된 부분] url을 포함하여 데이터를 가공합니다.
       const flattenedNews = allNews.flat().map((news, index) => ({
         id: news.id || news.articleId || `news-${index}`,
         title: news.title || news.headline || "제목 없음",
@@ -224,7 +320,7 @@ export default function InterestNewsScreen() {
           news.createdAt ||
           news.publishDate ||
           new Date().toISOString(),
-        url: news.url || "", // url을 추가합니다.
+        url: news.url || "",
       }));
 
       console.log("변환된 뉴스 데이터:", flattenedNews);
@@ -236,18 +332,15 @@ export default function InterestNewsScreen() {
       setLoading(false);
     }
   };
-  
-  // [추가된 부분] 뉴스 카드를 눌렀을 때 실행될 함수
+
   const handleNewsPress = async (url: string) => {
     if (!url) {
       Alert.alert("알림", "기사 원문 주소가 없습니다.");
       return;
     }
-    // 해당 URL을 열 수 있는지 확인합니다.
     const supported = await Linking.canOpenURL(url);
 
     if (supported) {
-      // URL을 엽니다 (기본 웹 브라우저 실행).
       await Linking.openURL(url);
     } else {
       Alert.alert("오류", `다음 주소를 열 수 없습니다: ${url}`);
@@ -294,11 +387,20 @@ export default function InterestNewsScreen() {
       {/* 상단 제목 */}
       <View style={styles.header}>
         <Text style={[styles.title, { textAlign: "center" }]}>관심뉴스</Text>
-        <Text style={styles.subtitle}>
-          {categories.length > 0
-            ? `${categories.join(", ")} 카테고리의 최신 뉴스입니다`
-            : "설정에서 관심 카테고리를 선택해주세요"}
-        </Text>
+        {userNickname ? (
+          <Text style={styles.subtitle}>
+            안녕하세요, {userNickname}님!{" "}
+            {categories.length > 0
+              ? `${categories.join(", ")} 카테고리의 최신 뉴스입니다`
+              : "설정에서 관심 카테고리를 선택해주세요"}
+          </Text>
+        ) : (
+          <Text style={styles.subtitle}>
+            {categories.length > 0
+              ? `${categories.join(", ")} 카테고리의 최신 뉴스입니다`
+              : "설정에서 관심 카테고리를 선택해주세요"}
+          </Text>
+        )}
       </View>
 
       {/* 뉴스 목록 */}
@@ -314,12 +416,11 @@ export default function InterestNewsScreen() {
             <Text style={styles.sectionTitle}>오늘의 주요 뉴스</Text>
 
             {newsData.map((news) => (
-              // [수정된 부분] View를 TouchableOpacity로 변경하고 onPress 이벤트를 추가합니다.
               <TouchableOpacity
                 key={news.id}
                 style={styles.newsCard}
                 onPress={() => handleNewsPress(news.url)}
-                activeOpacity={0.7} // 터치 시 투명도를 조절하여 시각적 피드백을 줍니다.
+                activeOpacity={0.7}
               >
                 <View style={styles.newsHeader}>
                   <Text

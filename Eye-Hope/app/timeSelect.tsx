@@ -83,16 +83,11 @@ export default function TimeSelectScreen() {
           },
         });
       } else {
-        // 일반 플로우(초기 설정)라면 설정 완료 플래그 저장
-        await saveSetupCompleted();
-        
-        // 관심뉴스 탭으로 이동하면서 시간 정보도 전달
-        router.push({
-          pathname: "/(tabs)",
+        // 일반 플로우(초기 설정)라면 닉네임 입력 페이지로 이동
+        router.replace({
+          pathname: "/nicknameInput" as any,
           params: {
             categories: categories,
-            morningTime: selectedMorningTime,
-            eveningTime: selectedEveningTime,
             selectedTimes: JSON.stringify({
               morning: selectedMorningTime,
               evening: selectedEveningTime,

@@ -10,6 +10,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { userApiService } from "../services/userApi";
 
 // 카테고리별 색상 매핑 함수 추가
 const getCategoryColor = (category: string): string => {
@@ -46,10 +47,12 @@ export default function SettingsScreen() {
     morning: "오전 9시",
     evening: "오후 8시",
   });
+  const [userNickname, setUserNickname] = useState<string>("사용자");
+  const [userEmail, setUserEmail] = useState<string>("");
 
-  // 앱 시작 시 저장된 카테고리 로드
+  // 앱 시작 시 저장된 사용자 정보 로드
   useEffect(() => {
-    loadSavedCategories();
+    loadUserData();
   }, []);
 
   // 화면이 포커스될 때마다 저장된 데이터 새로고침
@@ -69,30 +72,88 @@ export default function SettingsScreen() {
 
       // 파라미터가 없을 때만 저장된 데이터 로드
       console.log("파라미터가 없어서 저장된 데이터 로드");
-      loadSavedCategories();
+      loadUserData();
     }, [params.selectedCategories, params.selectedTimes])
   );
 
-  // 저장된 카테고리와 시간 정보 불러오기
-  const loadSavedCategories = async () => {
+  // 저장된 사용자 정보 불러오기 (API 오류 처리 개선)
+  const loadUserData = async () => {
     try {
-      // 카테고리 로드
+      console.log("설정 페이지 - 사용자 데이터 로드 시작");
+
+      // 백엔드에서 사용자 프로필 가져오기 시도 (한 번만)
+      try {
+        const profileResponse = await userApiService.getUserProfile();
+        if (profileResponse.success && profileResponse.data) {
+          const profile = profileResponse.data;
+          console.log("설정 페이지 - 백엔드에서 프로필 가져오기 성공");
+
+          setCurrentCategories(profile.categories || []);
+          setCurrentTimes(
+            profile.schedules || { morning: "오전 9시", evening: "오후 8시" }
+          );
+          setUserNickname(profile.nickname || "사용자");
+          setUserEmail(profile.email || "");
+
+          // 로컬에도 저장
+          await AsyncStorage.setItem(
+            "userCategories",
+            JSON.stringify(profile.categories || [])
+          );
+          await AsyncStorage.setItem(
+            "userTimes",
+            JSON.stringify(profile.schedules || {})
+          );
+          await AsyncStorage.setItem("userNickname", profile.nickname || "");
+          await AsyncStorage.setItem("userEmail", profile.email || "");
+
+          console.log("설정 페이지 - 백엔드 데이터로 상태 업데이트 완료");
+          return; // 백엔드에서 성공적으로 가져왔으면 리턴
+        }
+      } catch (error) {
+        console.log(
+          "설정 페이지 - 백엔드 API 호출 실패, 로컬 데이터 사용:",
+          error
+        );
+        // API 실패 시 더 이상 재시도하지 않고 로컬 데이터 사용
+      }
+
+      // 백엔드 실패 시 로컬 데이터 사용
+      console.log("설정 페이지 - 로컬 저장소에서 데이터 로드");
       const savedCategories = await AsyncStorage.getItem("userCategories");
+      const savedTimes = await AsyncStorage.getItem("userTimes");
+      const savedNickname = await AsyncStorage.getItem("userNickname");
+      const savedEmail = await AsyncStorage.getItem("userEmail");
+
       if (savedCategories) {
         const parsedCategories = JSON.parse(savedCategories);
         setCurrentCategories(parsedCategories);
-        console.log("저장된 카테고리 로드됨:", parsedCategories);
+        console.log("설정 페이지 - 로컬에서 카테고리 로드:", parsedCategories);
       }
 
-      // 시간 정보 로드
-      const savedTimes = await AsyncStorage.getItem("userTimes");
       if (savedTimes) {
         const parsedTimes = JSON.parse(savedTimes);
         setCurrentTimes(parsedTimes);
-        console.log("저장된 시간 정보 로드됨:", parsedTimes);
+        console.log("설정 페이지 - 로컬에서 시간 정보 로드:", parsedTimes);
+      }
+
+      if (savedNickname) {
+        setUserNickname(savedNickname);
+        console.log("설정 페이지 - 로컬에서 닉네임 로드:", savedNickname);
+      } else {
+        setUserNickname("사용자");
+        console.log("설정 페이지 - 기본 닉네임 설정");
+      }
+
+      if (savedEmail) {
+        setUserEmail(savedEmail);
+        console.log("설정 페이지 - 로컬에서 이메일 로드:", savedEmail);
       }
     } catch (error) {
-      console.error("저장된 데이터 로드 오류:", error);
+      console.error("설정 페이지 - 사용자 데이터 로드 오류:", error);
+      // 모든 로드 실패 시 기본값 설정
+      setCurrentCategories(["경제", "정치", "사회"]);
+      setUserNickname("사용자");
     }
   };
 
@@ -102,17 +163,25 @@ export default function SettingsScreen() {
     // 실제 처리는 useFocusEffect에서 담당
   }, [params.selectedCategories, params.selectedTimes]);
 
-  // AsyncStorage에 카테고리 저장
+  // AsyncStorage에 카테고리 저장 및 백엔드 동기화
   const saveCategoriesToStorage = async (categories: string[]) => {
     try {
       await AsyncStorage.setItem("userCategories", JSON.stringify(categories));
       console.log("카테고리가 저장되었습니다:", categories);
+
+      // 백엔드에도 업데이트 시도
+      try {
+        await userApiService.updateUserCategories(categories);
+        console.log("백엔드 카테고리 업데이트 성공");
+      } catch (error) {
+        console.log("백엔드 카테고리 업데이트 실패:", error);
+      }
     } catch (error) {
       console.error("카테고리 저장 오류:", error);
     }
   };
 
-  // AsyncStorage에 시간 정보 저장
+  // AsyncStorage에 시간 정보 저장 및 백엔드 동기화
   const saveTimesToStorage = async (times: {
     morning: string;
     evening: string;
@@ -120,12 +189,20 @@ export default function SettingsScreen() {
     try {
       await AsyncStorage.setItem("userTimes", JSON.stringify(times));
       console.log("시간 정보가 저장되었습니다:", times);
+
+      // 백엔드에도 업데이트 시도
+      try {
+        await userApiService.updateUserSchedule(times);
+        console.log("백엔드 스케줄 업데이트 성공");
+      } catch (error) {
+        console.log("백엔드 스케줄 업데이트 실패:", error);
+      }
     } catch (error) {
       console.error("시간 정보 저장 오류:", error);
     }
   };
 
-  // 파라미터 업데이트 처리 함수
+  // 파라미터 업데이트 처리 함수 (무한 루프 방지)
   const handleParamsUpdate = () => {
     console.log("파라미터 업데이트 처리 시작");
 
@@ -134,7 +211,12 @@ export default function SettingsScreen() {
       try {
         const categories = JSON.parse(params.selectedCategories as string);
         console.log("파라미터에서 카테고리 파싱:", categories);
-        if (Array.isArray(categories)) {
+
+        // 현재 상태와 다를 때만 업데이트 (무한 루프 방지)
+        if (
+          Array.isArray(categories) &&
+          JSON.stringify(categories) !== JSON.stringify(currentCategories)
+        ) {
           console.log("카테고리 상태 업데이트:", categories);
           setCurrentCategories(categories);
           // AsyncStorage에 카테고리 저장
@@ -154,10 +236,14 @@ export default function SettingsScreen() {
             morning: times.morning,
             evening: times.evening,
           };
-          console.log("시간 상태 업데이트:", newTimes);
-          setCurrentTimes(newTimes);
-          // AsyncStorage에 시간 정보 저장
-          saveTimesToStorage(newTimes);
+
+          // 현재 상태와 다를 때만 업데이트 (무한 루프 방지)
+          if (JSON.stringify(newTimes) !== JSON.stringify(currentTimes)) {
+            console.log("시간 상태 업데이트:", newTimes);
+            setCurrentTimes(newTimes);
+            // AsyncStorage에 시간 정보 저장
+            saveTimesToStorage(newTimes);
+          }
         }
       } catch (error) {
         console.error("시간 파라미터 파싱 오류:", error);
@@ -190,7 +276,13 @@ export default function SettingsScreen() {
 
       {/* 사용자 정보 및 안내 섹션 */}
       <View style={styles.userInfoSection}>
-        <Text style={styles.userName}>사용자님</Text>
+        <View style={styles.userHeaderRow}>
+          <Ionicons name="person-circle" size={40} color="#007AFF" />
+          <View style={styles.userTextContainer}>
+            <Text style={styles.userName}>{userNickname}님</Text>
+            {userEmail && <Text style={styles.userEmail}>{userEmail}</Text>}
+          </View>
+        </View>
         <Text style={styles.userQuestion}>
           {"일상생활 속, eye hope이 알려주는\n오늘의 뉴스 기사는 어떠셨나요?"}
         </Text>
@@ -313,12 +405,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#FFFFFF",
   },
+  userHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  userTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
   userName: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#000000",
-    marginBottom: 12,
-    textAlign: "center",
+    marginBottom: 2,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: "#666666",
+    fontStyle: "italic",
   },
   userQuestion: {
     fontSize: 16,
