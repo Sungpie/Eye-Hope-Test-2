@@ -1,3 +1,4 @@
+// app/userRegistration.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -14,6 +15,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import uuid from "react-native-uuid";
+import NotificationService from "../services/NotificationService";
 
 interface UserRegistrationData {
   deviceId: string;
@@ -51,12 +53,12 @@ export default function UserRegistrationScreen() {
 
   // 파라미터에서 데이터 파싱 및 디버깅
   const selectedCategories = categories ? JSON.parse(categories) : [];
-  
+
   console.log("🔍 === UserRegistration 파라미터 디버깅 ===");
   console.log("📋 categories (raw):", categories);
   console.log("📋 selectedTimes (raw):", selectedTimes);
   console.log("📋 selectedCategories (parsed):", selectedCategories);
-  
+
   let timeData = null;
   try {
     timeData = selectedTimes ? JSON.parse(selectedTimes) : null;
@@ -91,22 +93,25 @@ export default function UserRegistrationScreen() {
   const checkUserExists = async (deviceId: string): Promise<boolean> => {
     try {
       console.log("👤 사용자 존재 여부 확인 중:", deviceId);
-      
-      const response = await fetch(`http://13.124.111.205:8080/api/users/${encodeURIComponent(deviceId)}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+
+      const response = await fetch(
+        `http://13.124.111.205:8080/api/users/${encodeURIComponent(deviceId)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       console.log("👤 사용자 존재 확인 응답 상태:", response.status);
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log("👤 사용자 존재 확인 응답:", result);
         return result.success && result.data;
       }
-      
+
       return false;
     } catch (error) {
       console.error("👤 사용자 존재 확인 오류:", error);
@@ -119,20 +124,23 @@ export default function UserRegistrationScreen() {
     try {
       console.log("👤 === 사용자 등록 API 호출 시작 ===");
       console.log("📤 전송 데이터:", JSON.stringify(userData, null, 2));
-      
-      const response = await fetch("http://13.124.111.205:8080/api/users/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          deviceId: userData.deviceId,
-          name: userData.name || null,
-          email: userData.email || null,
-          nickname: userData.nickname,
-          password: null,
-        }),
-      });
+
+      const response = await fetch(
+        "http://13.124.111.205:8080/api/users/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            deviceId: userData.deviceId,
+            name: userData.name || null,
+            email: userData.email || null,
+            nickname: userData.nickname,
+            password: null,
+          }),
+        }
+      );
 
       const result = await response.json();
       console.log("👤 사용자 등록 응답:", result);
@@ -153,24 +161,31 @@ export default function UserRegistrationScreen() {
     try {
       console.log("🔄 === 사용자 정보 업데이트 API 호출 시작 ===");
       console.log("📤 전송 데이터:", JSON.stringify(userData, null, 2));
-      
-      const response = await fetch(`http://13.124.111.205:8080/api/users/${encodeURIComponent(userData.deviceId)}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: userData.name || null,
-          email: userData.email || null,
-          nickname: userData.nickname,
-        }),
-      });
+
+      const response = await fetch(
+        `http://13.124.111.205:8080/api/users/${encodeURIComponent(
+          userData.deviceId
+        )}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: userData.name || null,
+            email: userData.email || null,
+            nickname: userData.nickname,
+          }),
+        }
+      );
 
       const result = await response.json();
       console.log("🔄 사용자 정보 업데이트 응답:", result);
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "사용자 정보 업데이트에 실패했습니다.");
+        throw new Error(
+          result.message || "사용자 정보 업데이트에 실패했습니다."
+        );
       }
 
       return result;
@@ -183,47 +198,52 @@ export default function UserRegistrationScreen() {
   // 시간 형식 변환 함수 (HH:MM 형식 확인 및 변환)
   const convertTimeFormat = (timeString: string): string => {
     console.log("🔄 convertTimeFormat 호출:", timeString);
-    
+
     if (!timeString) {
       console.log("   ❌ 입력값이 없음");
       return "";
     }
-    
+
     // 이미 HH:MM 형식인 경우 그대로 반환
     if (timeString.match(/^\d{2}:\d{2}$/)) {
       console.log("   ✅ 이미 HH:MM 형식:", timeString);
       return timeString;
     }
-    
+
     // "9시" → "09:00" 형식으로 변환 (기존 호환성)
     const hourMatch = timeString.match(/(\d+)시/);
     if (hourMatch) {
       const hour = parseInt(hourMatch[1]);
-      const result = hour.toString().padStart(2, '0') + ':00';
+      const result = hour.toString().padStart(2, "0") + ":00";
       console.log("   ✅ '시' 형식 변환:", timeString, "→", result);
       return result;
     }
-    
+
     console.log("   ⚠️ 변환할 수 없는 형식, 원본 반환:", timeString);
     return timeString;
   };
 
   // 알림 시간 등록 API 호출
-  const registerNotificationSchedule = async (scheduleData: NotificationScheduleData) => {
+  const registerNotificationSchedule = async (
+    scheduleData: NotificationScheduleData
+  ) => {
     try {
       console.log("🌐 === 알림 시간 등록 API 호출 시작 ===");
       console.log("📤 전송 데이터:", JSON.stringify(scheduleData, null, 2));
-      
-      const response = await fetch("http://13.124.111.205:8080/api/users/schedules", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(scheduleData),
-      });
+
+      const response = await fetch(
+        "http://13.124.111.205:8080/api/users/schedules",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(scheduleData),
+        }
+      );
 
       console.log("📥 응답 상태:", response.status);
-      
+
       const result = await response.json();
       console.log("📥 응답 데이터:", JSON.stringify(result, null, 2));
       console.log("🌐 === 알림 시간 등록 API 호출 종료 ===");
@@ -236,6 +256,45 @@ export default function UserRegistrationScreen() {
     } catch (error) {
       console.error("🚨 알림 시간 등록 오류:", error);
       throw error;
+    }
+  };
+
+  // FCM 토큰 처리
+  const handleFCMToken = async (deviceId: string) => {
+    try {
+      console.log("🔔 === FCM 토큰 처리 시작 ===");
+
+      const notificationService = NotificationService.getInstance();
+
+      // 기존에 저장된 토큰이 있는지 확인
+      let token = await notificationService.getStoredToken();
+
+      if (!token) {
+        console.log("📱 저장된 토큰이 없음 - 새로 요청");
+        token = await notificationService.getFCMToken();
+      } else {
+        console.log("📱 저장된 토큰 사용:", token);
+      }
+
+      if (token) {
+        const success = await notificationService.sendTokenToBackend(
+          token,
+          deviceId
+        );
+        if (success) {
+          console.log("✅ FCM 토큰 백엔드 전송 성공");
+          return true;
+        } else {
+          console.log("⚠️ FCM 토큰 백엔드 전송 실패");
+          return false;
+        }
+      } else {
+        console.log("⚠️ FCM 토큰을 받지 못함");
+        return false;
+      }
+    } catch (error) {
+      console.error("❌ FCM 토큰 처리 오류:", error);
+      return false;
     }
   };
 
@@ -295,34 +354,51 @@ export default function UserRegistrationScreen() {
       }
 
       // 사용자 정보를 AsyncStorage에 저장
-      await AsyncStorage.setItem("userInfo", JSON.stringify({
-        deviceId: deviceId,
-        name: "", // 빈 값으로 저장
-        email: "", // 빈 값으로 저장
-        nickname: formData.nickname.trim(),
-      }));
+      await AsyncStorage.setItem(
+        "userInfo",
+        JSON.stringify({
+          deviceId: deviceId,
+          name: "", // 빈 값으로 저장
+          email: "", // 빈 값으로 저장
+          nickname: formData.nickname.trim(),
+        })
+      );
 
       // 설정 완료 플래그 저장
       await saveSetupCompleted();
 
+      // FCM 토큰 처리
+      console.log("🔔 FCM 토큰 처리 시작");
+      const fcmSuccess = await handleFCMToken(deviceId);
+      if (fcmSuccess) {
+        console.log("✅ FCM 토큰 처리 성공");
+      } else {
+        console.log("⚠️ FCM 토큰 처리 실패 (나중에 자동으로 재시도됩니다)");
+      }
+
       // 알림 시간 등록 (별도 처리 - 실패해도 진행)
       let notificationSuccess = true;
-      
+
       console.log("⏰ === 알림 시간 등록 프로세스 시작 ===");
       console.log("⏰ timeData:", timeData);
-      
+
       if (timeData && timeData.morning && timeData.evening) {
         try {
           // 시간 변환
           const morningTime = convertTimeFormat(timeData.morning);
           const eveningTime = convertTimeFormat(timeData.evening);
-          
-          console.log("⏰ 변환된 시간 - 아침:", morningTime, "저녁:", eveningTime);
-          
+
+          console.log(
+            "⏰ 변환된 시간 - 아침:",
+            morningTime,
+            "저녁:",
+            eveningTime
+          );
+
           if (!morningTime || !eveningTime) {
             throw new Error("시간 변환 실패");
           }
-          
+
           const notificationScheduleData: NotificationScheduleData = {
             deviceId: deviceId,
             notificationTime: [morningTime, eveningTime],
@@ -330,11 +406,10 @@ export default function UserRegistrationScreen() {
 
           await registerNotificationSchedule(notificationScheduleData);
           console.log("✅ 알림 시간 등록 성공!");
-          
         } catch (notificationError) {
           console.error("❌ 알림 시간 등록 실패:", notificationError);
           notificationSuccess = false;
-          
+
           // 기본값으로 재시도
           try {
             console.log("⏰ 기본값으로 재시도");
@@ -342,7 +417,7 @@ export default function UserRegistrationScreen() {
               deviceId: deviceId,
               notificationTime: ["09:00", "18:00"],
             };
-            
+
             await registerNotificationSchedule(defaultData);
             console.log("✅ 기본값으로 알림 시간 등록 성공!");
             notificationSuccess = true;
@@ -357,7 +432,7 @@ export default function UserRegistrationScreen() {
             deviceId: deviceId,
             notificationTime: ["09:00", "18:00"],
           };
-          
+
           await registerNotificationSchedule(defaultData);
           console.log("✅ 기본값으로 알림 시간 등록 성공!");
         } catch (defaultError) {
@@ -367,39 +442,39 @@ export default function UserRegistrationScreen() {
       }
 
       // 결과에 따른 메시지 표시
-      const message = notificationSuccess 
-        ? "등록이 완료되었습니다!"
-        : "사용자 등록은 완료되었으나, 알림 시간 설정에 문제가 있었습니다.\n설정에서 나중에 변경할 수 있습니다.";
+      let message = "등록이 완료되었습니다!";
 
-      Alert.alert(
-        "완료",
-        message,
-        [
-          {
-            text: "확인",
-            onPress: () => {
-              router.push({
-                pathname: "/(tabs)",
-                params: {
-                  categories: categories,
-                  selectedTimes: selectedTimes,
-                },
-              });
-            },
+      if (!fcmSuccess && !notificationSuccess) {
+        message =
+          "사용자 등록은 완료되었으나, 알림 설정에 문제가 있었습니다.\n설정에서 나중에 변경할 수 있습니다.";
+      } else if (!fcmSuccess) {
+        message = "등록이 완료되었습니다!\n알림 토큰은 자동으로 재시도됩니다.";
+      } else if (!notificationSuccess) {
+        message =
+          "등록이 완료되었습니다!\n알림 시간 설정에 문제가 있었습니다. 설정에서 변경할 수 있습니다.";
+      }
+
+      Alert.alert("완료", message, [
+        {
+          text: "확인",
+          onPress: () => {
+            router.push({
+              pathname: "/(tabs)",
+              params: {
+                categories: categories,
+                selectedTimes: selectedTimes,
+              },
+            });
           },
-        ]
-      );
-
+        },
+      ]);
     } catch (error) {
       console.error("등록 과정 오류:", error);
-      
-      const errorMessage = error instanceof Error ? error.message : "처리 중 오류가 발생했습니다.";
-      
-      Alert.alert(
-        "오류",
-        errorMessage,
-        [{ text: "확인" }]
-      );
+
+      const errorMessage =
+        error instanceof Error ? error.message : "처리 중 오류가 발생했습니다.";
+
+      Alert.alert("오류", errorMessage, [{ text: "확인" }]);
     } finally {
       setLoading(false);
     }
@@ -471,7 +546,9 @@ export default function UserRegistrationScreen() {
             <TextInput
               style={[styles.textInput, styles.requiredInput]}
               value={formData.nickname}
-              onChangeText={(text) => setFormData({ ...formData, nickname: text })}
+              onChangeText={(text) =>
+                setFormData({ ...formData, nickname: text })
+              }
               placeholder="사용하실 닉네임을 입력해주세요"
               placeholderTextColor="#C7C7CC"
               autoCapitalize="none"
@@ -484,7 +561,7 @@ export default function UserRegistrationScreen() {
         {/* 설정 요약 */}
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryTitle}>설정 요약</Text>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>관심 분야:</Text>
             <Text style={styles.summaryValue}>
@@ -500,6 +577,14 @@ export default function UserRegistrationScreen() {
               </Text>
             </View>
           )}
+
+          {/* FCM 알림 안내 추가 */}
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>알림 설정:</Text>
+            <Text style={styles.summaryValue}>
+              푸시 알림이 자동으로 설정됩니다
+            </Text>
+          </View>
         </View>
 
         {/* 완료 버튼 */}

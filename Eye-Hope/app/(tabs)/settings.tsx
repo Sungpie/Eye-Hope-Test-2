@@ -12,6 +12,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { NotificationSettings } from "../../components/NotificationSettings";
 
 // 카테고리별 색상 매핑 함수 추가
 const getCategoryColor = (category: string): string => {
@@ -32,14 +33,14 @@ const getCategoryColor = (category: string): string => {
 // 카테고리 매핑 함수들 (안전하게 수정)
 const categoryToId = (category: string): string => {
   const mapping: { [key: string]: number } = {
-    "경제": 1,
-    "증권": 2,
-    "스포츠": 3,
-    "연예": 4,
-    "정치": 5,
-    "IT": 6,
-    "사회": 7,
-    "오피니언": 8,
+    경제: 1,
+    증권: 2,
+    스포츠: 3,
+    연예: 4,
+    정치: 5,
+    IT: 6,
+    사회: 7,
+    오피니언: 8,
   };
   const id = mapping[category];
   return id ? id.toString() : "0"; // 숫자를 문자열로 변환
@@ -48,7 +49,7 @@ const categoryToId = (category: string): string => {
 const idToCategory = (id: number): string => {
   const mapping: { [key: number]: string } = {
     1: "경제",
-    2: "증권", 
+    2: "증권",
     3: "스포츠",
     4: "연예",
     5: "정치",
@@ -124,7 +125,11 @@ export default function SettingsScreen() {
       console.log("현재 params:", params);
 
       // 파라미터가 있으면 우선 처리 후 즉시 반환
-      if (params.selectedCategories || params.selectedTimes || params.updatedUserInfo) {
+      if (
+        params.selectedCategories ||
+        params.selectedTimes ||
+        params.updatedUserInfo
+      ) {
         console.log("파라미터가 있어서 파라미터 우선 처리");
         handleParamsUpdate();
         return;
@@ -133,7 +138,12 @@ export default function SettingsScreen() {
       // 파라미터가 없을 때만 저장된 데이터 로드
       console.log("파라미터가 없어서 저장된 데이터 로드");
       loadSavedData();
-    }, [params.selectedCategories, params.selectedTimes, params.updatedUserInfo, params.fromNewsUpdate])
+    }, [
+      params.selectedCategories,
+      params.selectedTimes,
+      params.updatedUserInfo,
+      params.fromNewsUpdate,
+    ])
   );
 
   // 백엔드에서 사용자 정보 가져오기
@@ -147,32 +157,44 @@ export default function SettingsScreen() {
 
       console.log("👤 === 백엔드에서 사용자 정보 가져오기 시작 ===");
       console.log("📤 DeviceId:", deviceId);
-      
-      const response = await fetch(`http://13.124.111.205:8080/api/users/${encodeURIComponent(deviceId)}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+
+      const response = await fetch(
+        `http://13.124.111.205:8080/api/users/${encodeURIComponent(deviceId)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       console.log("📥 사용자 정보 응답 상태:", response.status);
 
       if (response.ok) {
         const result = await response.json();
-        console.log("📥 사용자 정보 응답 데이터:", JSON.stringify(result, null, 2));
-        
+        console.log(
+          "📥 사용자 정보 응답 데이터:",
+          JSON.stringify(result, null, 2)
+        );
+
         if (result.success && result.data) {
           return result.data;
         } else {
-          console.log("📥 사용자 정보 응답 데이터 형식이 올바르지 않음:", result);
+          console.log(
+            "📥 사용자 정보 응답 데이터 형식이 올바르지 않음:",
+            result
+          );
           return null;
         }
       } else {
         const errorText = await response.text();
-        console.log("📥 사용자 정보 HTTP 오류 응답:", response.status, errorText);
+        console.log(
+          "📥 사용자 정보 HTTP 오류 응답:",
+          response.status,
+          errorText
+        );
         return null;
       }
-      
     } catch (error) {
       console.error("🚨 사용자 정보 가져오기 오류:", error);
       return null;
@@ -190,30 +212,42 @@ export default function SettingsScreen() {
 
       console.log("📰 === 백엔드에서 사용자 관심 뉴스 가져오기 시작 ===");
       console.log("📤 DeviceId:", deviceId);
-      
+
       // 수정된 API 엔드포인트 사용 (apis -> api)
-      const response = await fetch(`http://13.124.111.205:8080/api/users/news/${encodeURIComponent(deviceId)}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `http://13.124.111.205:8080/api/users/news/${encodeURIComponent(
+          deviceId
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       console.log("📥 관심 뉴스 응답 상태:", response.status);
 
       if (response.ok) {
         const result: UserNewsResponse = await response.json();
-        console.log("📥 관심 뉴스 응답 데이터:", JSON.stringify(result, null, 2));
-        
+        console.log(
+          "📥 관심 뉴스 응답 데이터:",
+          JSON.stringify(result, null, 2)
+        );
+
         if (result.success && result.data && Array.isArray(result.data.news)) {
           // 새로운 응답 형식에서 카테고리명 추출
-          const categories = result.data.news.map((newsItem: NewsItem) => newsItem.category);
+          const categories = result.data.news.map(
+            (newsItem: NewsItem) => newsItem.category
+          );
           console.log("📰 추출된 카테고리:", categories);
-          
+
           // 유효한 카테고리만 필터링
-          const validCategories = categories.filter(cat => cat && cat.trim() !== "");
+          const validCategories = categories.filter(
+            (cat) => cat && cat.trim() !== ""
+          );
           console.log("📰 유효한 카테고리:", validCategories);
-          
+
           return validCategories;
         } else {
           console.log("📰 관심 뉴스 응답 데이터 형식이 올바르지 않음:", result);
@@ -224,7 +258,6 @@ export default function SettingsScreen() {
         console.log("📰 관심 뉴스 HTTP 오류 응답:", response.status, errorText);
         return null;
       }
-      
     } catch (error) {
       console.error("🚨 사용자 관심 뉴스 가져오기 오류:", error);
       return null;
@@ -232,7 +265,10 @@ export default function SettingsScreen() {
   };
 
   // 백엔드에서 사용자 알림 시간 가져오기 (새로 추가)
-  const fetchUserSchedule = async (): Promise<{ morning: string; evening: string } | null> => {
+  const fetchUserSchedule = async (): Promise<{
+    morning: string;
+    evening: string;
+  } | null> => {
     try {
       const deviceId = await AsyncStorage.getItem("deviceId");
       if (!deviceId) {
@@ -242,21 +278,33 @@ export default function SettingsScreen() {
 
       console.log("⏰ === 백엔드에서 사용자 알림 시간 가져오기 시작 ===");
       console.log("📤 DeviceId:", deviceId);
-      
-      const response = await fetch(`http://13.124.111.205:8080/api/users/schedules/${encodeURIComponent(deviceId)}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+
+      const response = await fetch(
+        `http://13.124.111.205:8080/api/users/schedules/${encodeURIComponent(
+          deviceId
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       console.log("📥 알림 시간 응답 상태:", response.status);
 
       if (response.ok) {
         const result: UserScheduleResponse = await response.json();
-        console.log("📥 알림 시간 응답 데이터:", JSON.stringify(result, null, 2));
-        
-        if (result.success && result.data && Array.isArray(result.data.notificationTime)) {
+        console.log(
+          "📥 알림 시간 응답 데이터:",
+          JSON.stringify(result, null, 2)
+        );
+
+        if (
+          result.success &&
+          result.data &&
+          Array.isArray(result.data.notificationTime)
+        ) {
           const times = result.data.notificationTime;
           if (times.length >= 2) {
             return {
@@ -265,7 +313,7 @@ export default function SettingsScreen() {
             };
           }
         }
-        
+
         console.log("📥 알림 시간 응답 데이터 형식이 올바르지 않음:", result);
         return null;
       } else {
@@ -273,7 +321,6 @@ export default function SettingsScreen() {
         console.log("📥 알림 시간 HTTP 오류 응답:", response.status, errorText);
         return null;
       }
-      
     } catch (error) {
       console.error("🚨 사용자 알림 시간 가져오기 오류:", error);
       return null;
@@ -283,11 +330,11 @@ export default function SettingsScreen() {
   // 저장된 데이터 불러오기
   const loadSavedData = async () => {
     setLoading(true);
-    
+
     try {
       // 1. 사용자 정보 가져오기
       const backendUserInfo = await fetchUserInfo();
-      
+
       if (backendUserInfo) {
         console.log("✅ 백엔드에서 사용자 정보 로드됨:", backendUserInfo);
         setUserInfo(backendUserInfo);
@@ -295,7 +342,9 @@ export default function SettingsScreen() {
         await AsyncStorage.setItem("userInfo", JSON.stringify(backendUserInfo));
       } else {
         // 백엔드에서 가져오기 실패 시 로컬 데이터 사용
-        console.log("⚠️ 백엔드에서 사용자 정보 가져오기 실패 - 로컬 데이터 사용");
+        console.log(
+          "⚠️ 백엔드에서 사용자 정보 가져오기 실패 - 로컬 데이터 사용"
+        );
         const savedUserInfo = await AsyncStorage.getItem("userInfo");
         if (savedUserInfo) {
           const parsedUserInfo = JSON.parse(savedUserInfo);
@@ -306,12 +355,15 @@ export default function SettingsScreen() {
 
       // 2. 관심 뉴스 가져오기
       const backendCategories = await fetchUserNews();
-      
+
       if (backendCategories && backendCategories.length > 0) {
         console.log("✅ 백엔드에서 관심 뉴스 로드됨:", backendCategories);
         setCurrentCategories(backendCategories);
         // 백엔드 데이터를 로컬에도 동기화
-        await AsyncStorage.setItem("userCategories", JSON.stringify(backendCategories));
+        await AsyncStorage.setItem(
+          "userCategories",
+          JSON.stringify(backendCategories)
+        );
       } else {
         // 백엔드에서 가져오기 실패 시 로컬 데이터 사용
         console.log("⚠️ 백엔드에서 관심 뉴스 가져오기 실패 - 로컬 데이터 사용");
@@ -325,12 +377,15 @@ export default function SettingsScreen() {
 
       // 3. 알림 시간 가져오기
       const backendSchedule = await fetchUserSchedule();
-      
+
       if (backendSchedule) {
         console.log("✅ 백엔드에서 알림 시간 로드됨:", backendSchedule);
         setCurrentTimes(backendSchedule);
         // 백엔드 데이터를 로컬에도 동기화
-        await AsyncStorage.setItem("userTimes", JSON.stringify(backendSchedule));
+        await AsyncStorage.setItem(
+          "userTimes",
+          JSON.stringify(backendSchedule)
+        );
       } else {
         // 백엔드에서 가져오기 실패 시 로컬 데이터 사용
         console.log("⚠️ 백엔드에서 알림 시간 가져오기 실패 - 로컬 데이터 사용");
@@ -343,20 +398,20 @@ export default function SettingsScreen() {
       }
     } catch (error) {
       console.error("❌ 저장된 데이터 로드 오류:", error);
-      
+
       // 에러 발생 시 사용자에게 알림 (선택사항)
       Alert.alert(
         "데이터 로드 오류",
         "일부 데이터를 불러오는 중 문제가 발생했습니다. 로컬 데이터로 표시됩니다.",
         [{ text: "확인" }]
       );
-      
+
       // 에러 발생 시에도 로컬 데이터는 로드
       try {
         const savedCategories = await AsyncStorage.getItem("userCategories");
         const savedTimes = await AsyncStorage.getItem("userTimes");
         const savedUserInfo = await AsyncStorage.getItem("userInfo");
-        
+
         if (savedCategories) {
           setCurrentCategories(JSON.parse(savedCategories));
         }
@@ -476,9 +531,9 @@ export default function SettingsScreen() {
   const handleUserInfoChange = () => {
     router.push({
       pathname: "/userEdit",
-      params: { 
+      params: {
         currentUserInfo: JSON.stringify(userInfo || {}),
-        fromSettings: "true"
+        fromSettings: "true",
       },
     });
   };
@@ -488,7 +543,7 @@ export default function SettingsScreen() {
     if (!userInfo) {
       return "사용자 정보를 불러올 수 없습니다. 사용자 정보 변경을 원하신다면 두 번 눌러주세요";
     }
-    
+
     let label = "사용자 정보. ";
     label += `닉네임: ${userInfo.nickname || "정보 없음"}. `;
     if (userInfo.name) {
@@ -501,7 +556,7 @@ export default function SettingsScreen() {
       label += `Device ID: ${userInfo.deviceId.substring(0, 8)}.... `;
     }
     label += "사용자 정보 변경을 원하신다면 두 번 눌러주세요";
-    
+
     return label;
   };
 
@@ -513,17 +568,20 @@ export default function SettingsScreen() {
     } else {
       label += "선택된 카테고리가 없습니다. ";
     }
-    label += "관심뉴스를 수정 변경하시겠어요? 변경을 원하신다면 두 번 눌러주세요.";
-    
+    label +=
+      "관심뉴스를 수정 변경하시겠어요? 변경을 원하신다면 두 번 눌러주세요.";
+
     return label;
   };
 
   // 접근성을 위한 시간 설정 텍스트 생성
   const getTimeAccessibilityLabel = () => {
     let label = "알림 시간대 변경. ";
-    label += `현재 알림 시간대는 ${currentTimes.morning || "미설정"}와 ${currentTimes.evening || "미설정"}에요. `;
+    label += `현재 알림 시간대는 ${currentTimes.morning || "미설정"}와 ${
+      currentTimes.evening || "미설정"
+    }에요. `;
     label += "시간대 변경을 원하신다면 두 번 눌러주세요.";
-    
+
     return label;
   };
 
@@ -542,8 +600,11 @@ export default function SettingsScreen() {
           </View>
         )}
 
+        {/* 알림 설정 컴포넌트 추가 */}
+        <NotificationSettings userInfo={userInfo} />
+
         {/* 사용자 정보 섹션 - 접근성 개선 */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.userInfoSection}
           onPress={handleUserInfoChange}
           activeOpacity={0.7}
@@ -553,44 +614,62 @@ export default function SettingsScreen() {
           accessibilityHint="사용자 정보를 변경할 수 있는 페이지로 이동합니다"
         >
           <View style={styles.sectionHeaderSimple} accessible={false}>
-            <Text style={styles.sectionTitle} accessible={false}>사용자 정보</Text>
+            <Text style={styles.sectionTitle} accessible={false}>
+              사용자 정보
+            </Text>
           </View>
-          
+
           <View accessible={false}>
             {userInfo ? (
               <View style={styles.userInfoContainer} accessible={false}>
                 <View style={styles.userInfoItem} accessible={false}>
-                  <Text style={styles.userInfoLabel} accessible={false}>닉네임:</Text>
+                  <Text style={styles.userInfoLabel} accessible={false}>
+                    닉네임:
+                  </Text>
                   <Text style={styles.userInfoValue} accessible={false}>
                     {userInfo.nickname || "정보 없음"}
                   </Text>
                 </View>
-                
+
                 {userInfo.name && (
                   <View style={styles.userInfoItem} accessible={false}>
-                    <Text style={styles.userInfoLabel} accessible={false}>이름:</Text>
-                    <Text style={styles.userInfoValue} accessible={false}>{userInfo.name}</Text>
+                    <Text style={styles.userInfoLabel} accessible={false}>
+                      이름:
+                    </Text>
+                    <Text style={styles.userInfoValue} accessible={false}>
+                      {userInfo.name}
+                    </Text>
                   </View>
                 )}
-                
+
                 {userInfo.email && (
                   <View style={styles.userInfoItem} accessible={false}>
-                    <Text style={styles.userInfoLabel} accessible={false}>이메일:</Text>
-                    <Text style={styles.userInfoValue} accessible={false}>{userInfo.email}</Text>
+                    <Text style={styles.userInfoLabel} accessible={false}>
+                      이메일:
+                    </Text>
+                    <Text style={styles.userInfoValue} accessible={false}>
+                      {userInfo.email}
+                    </Text>
                   </View>
                 )}
-                
+
                 <View style={styles.userInfoItem} accessible={false}>
-                  <Text style={styles.userInfoLabel} accessible={false}>Device ID:</Text>
+                  <Text style={styles.userInfoLabel} accessible={false}>
+                    Device ID:
+                  </Text>
                   <Text style={styles.userInfoValue} accessible={false}>
-                    {userInfo.deviceId ? userInfo.deviceId.substring(0, 8) + "..." : "정보 없음"}
+                    {userInfo.deviceId
+                      ? userInfo.deviceId.substring(0, 8) + "..."
+                      : "정보 없음"}
                   </Text>
                 </View>
               </View>
             ) : (
-              <Text style={styles.noUserInfo} accessible={false}>사용자 정보를 불러올 수 없습니다</Text>
+              <Text style={styles.noUserInfo} accessible={false}>
+                사용자 정보를 불러올 수 없습니다
+              </Text>
             )}
-            
+
             {/* 변경 안내 문구 */}
             <Text style={styles.changeHintText} accessible={false}>
               사용자 정보 변경을 원하신다면 두 번 눌러주세요
@@ -609,17 +688,24 @@ export default function SettingsScreen() {
           accessibilityHint="관심 뉴스 카테고리를 수정할 수 있는 페이지로 이동합니다"
         >
           <View style={styles.sectionHeaderSimple} accessible={false}>
-            <Text style={[styles.sectionTitle, { textAlign: "center" }]} accessible={false}>
+            <Text
+              style={[styles.sectionTitle, { textAlign: "center" }]}
+              accessible={false}
+            >
               현재 관심뉴스
             </Text>
           </View>
-          
+
           <View
             style={[styles.categoriesContainer, { justifyContent: "center" }]}
             accessible={false}
           >
             {currentCategories.map((category, index) => (
-              <View key={index} style={styles.categoryItemContainer} accessible={false}>
+              <View
+                key={index}
+                style={styles.categoryItemContainer}
+                accessible={false}
+              >
                 <View
                   style={[
                     styles.categoryTag,
@@ -627,17 +713,26 @@ export default function SettingsScreen() {
                   ]}
                   accessible={false}
                 >
-                  <Text style={[styles.categoryText, { textAlign: "center" }]} accessible={false}>
+                  <Text
+                    style={[styles.categoryText, { textAlign: "center" }]}
+                    accessible={false}
+                  >
                     {category || "카테고리"}
                   </Text>
                 </View>
               </View>
             ))}
           </View>
-          <Text style={[styles.questionText, { textAlign: "center" }]} accessible={false}>
+          <Text
+            style={[styles.questionText, { textAlign: "center" }]}
+            accessible={false}
+          >
             관심뉴스를 수정 / 변경하시겠어요?
           </Text>
-          <Text style={[styles.instructionText, { textAlign: "center" }]} accessible={false}>
+          <Text
+            style={[styles.instructionText, { textAlign: "center" }]}
+            accessible={false}
+          >
             변경을 원하신다면 두 번 눌러주세요.
           </Text>
         </TouchableOpacity>
@@ -652,11 +747,20 @@ export default function SettingsScreen() {
           accessibilityLabel={getTimeAccessibilityLabel()}
           accessibilityHint="뉴스 알림을 받을 시간대를 수정할 수 있는 페이지로 이동합니다"
         >
-          <Text style={[styles.sectionTitle, { textAlign: "center" }]} accessible={false}>
+          <Text
+            style={[styles.sectionTitle, { textAlign: "center" }]}
+            accessible={false}
+          >
             알림 시간대 변경
           </Text>
-          <View style={[styles.timeInfoContainer, { alignItems: "center" }]} accessible={false}>
-            <Text style={[styles.timeInfoText, { textAlign: "center" }]} accessible={false}>
+          <View
+            style={[styles.timeInfoContainer, { alignItems: "center" }]}
+            accessible={false}
+          >
+            <Text
+              style={[styles.timeInfoText, { textAlign: "center" }]}
+              accessible={false}
+            >
               현재 알림 시간대는
             </Text>
             <View
@@ -671,24 +775,39 @@ export default function SettingsScreen() {
               accessible={false}
             >
               <View style={styles.timeButton} accessible={false}>
-                <Text style={[styles.timeButtonText, { textAlign: "center" }]} accessible={false}>
+                <Text
+                  style={[styles.timeButtonText, { textAlign: "center" }]}
+                  accessible={false}
+                >
                   {currentTimes.morning || "미설정"}
                 </Text>
               </View>
-              <Text style={[styles.timeInfoText, { textAlign: "center" }]} accessible={false}>
+              <Text
+                style={[styles.timeInfoText, { textAlign: "center" }]}
+                accessible={false}
+              >
                 와
               </Text>
               <View style={styles.timeButton} accessible={false}>
-                <Text style={[styles.timeButtonText, { textAlign: "center" }]} accessible={false}>
+                <Text
+                  style={[styles.timeButtonText, { textAlign: "center" }]}
+                  accessible={false}
+                >
                   {currentTimes.evening || "미설정"}
                 </Text>
               </View>
-              <Text style={[styles.timeInfoText, { textAlign: "center" }]} accessible={false}>
+              <Text
+                style={[styles.timeInfoText, { textAlign: "center" }]}
+                accessible={false}
+              >
                 에요.
               </Text>
             </View>
           </View>
-          <Text style={[styles.instructionText, { textAlign: "center" }]} accessible={false}>
+          <Text
+            style={[styles.instructionText, { textAlign: "center" }]}
+            accessible={false}
+          >
             시간대 변경을 원하신다면 두 번 눌러주세요.
           </Text>
         </TouchableOpacity>
